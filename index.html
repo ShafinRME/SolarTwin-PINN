@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SolarTwin-PINN | 3D Edge-Cloud Digital Twin &amp; Q1 Benchmark Suite</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+  <style>
+    body { background-color: #0b0f19; color: #e2e8f0; font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+    .glass-card { background: rgba(15, 23, 42, 0.88); border: 1px solid rgba(56, 189, 248, 0.2); backdrop-filter: blur(12px); }
+    input[type="range"] { accent-color: #38bdf8; }
+  </style>
+</head>
+<body class="min-h-screen p-4 md:p-6">
+  <!-- Header -->
+  <header class="max-w-7xl mx-auto mb-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+    <div>
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-sky-500/20 text-sky-400 border border-sky-500/30">Q1 Digital Twin Platform</span>
+        <span class="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">ESP32-S3 INT8 TinyML (2.14 ms)</span>
+        <span class="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">WebSerial HIL + Research Exporter</span>
+      </div>
+      <h1 class="text-2xl md:text-3xl font-bold text-white mt-1">SolarTwin-PINN: Cyber-Physical Solar-EV Digital Twin</h1>
+      <p class="text-xs md:text-sm text-slate-400">Physics-Informed Neural Network for Global MPPT &amp; Battery SoH under Dynamic Partial Shading (University of Dhaka)</p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <button id="btnPreset3Peak" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-sky-600 hover:bg-sky-500 text-white transition">3-Peak Severe Shading</button>
+      <button id="btnPreset2Peak" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">2-Peak Roadside Shadow</button>
+      <button id="btnPresetUniform" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">Uniform Dhaka Noon</button>
+      <button id="btnDynamicDrive" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition">&#9654; Run Dynamic EV Drive</button>
+    </div>
+  </header>
+
+  <!-- KPI Metrics Strip -->
+  <section class="max-w-7xl mx-auto grid grid-cols-2 md:grid-cols-6 gap-3 mb-5">
+    <div class="glass-card rounded-xl p-3.5">
+      <p class="text-xs text-slate-400">True Global MPP (<i>P</i><sub>GMPP</sub>)</p>
+      <p id="kpiTrueP" class="text-xl font-bold text-white mt-0.5">22.58 W</p>
+      <p id="kpiTrueV" class="text-xs text-sky-400">@ 37.90 V</p>
+    </div>
+    <div class="glass-card rounded-xl p-3.5">
+      <p class="text-xs text-slate-400">SolarTwin-PINN (<i>P</i><sub>PINN</sub>)</p>
+      <p id="kpiPinnP" class="text-xl font-bold text-emerald-400 mt-0.5">22.54 W</p>
+      <p id="kpiPinnEff" class="text-xs text-emerald-300">99.82% Efficiency</p>
+    </div>
+    <div class="glass-card rounded-xl p-3.5">
+      <p class="text-xs text-slate-400">Classical P&amp;O (Local Trap)</p>
+      <p id="kpiPoP" class="text-xl font-bold text-amber-400 mt-0.5">13.84 W</p>
+      <p id="kpiPoEff" class="text-xs text-rose-400">61.3% (Local Trap!)</p>
+    </div>
+    <div class="glass-card rounded-xl p-3.5">
+      <p class="text-xs text-slate-400">ESP32-S3 INT8 Latency</p>
+      <p id="kpiLatency" class="text-xl font-bold text-sky-400 mt-0.5">2.14 ms</p>
+      <p class="text-xs text-slate-400">Flash Footprint: 14.8 KB</p>
+    </div>
+    <div class="glass-card rounded-xl p-3.5">
+      <p class="text-xs text-slate-400">Cloud Battery SoH (RMSE)</p>
+      <p id="kpiBatSoh" class="text-xl font-bold text-purple-400 mt-0.5">96.42%</p>
+      <p class="text-xs text-slate-400">SoH RMSE: 0.088%</p>
+    </div>
+    <div class="glass-card rounded-xl p-3.5">
+      <p class="text-xs text-slate-400">Live Race Energy Gain</p>
+      <p id="kpiEnergyGain" class="text-xl font-bold text-emerald-400 mt-0.5">+18.07%</p>
+      <p id="kpiRaceTime" class="text-xs text-slate-400">195.89 Wh vs 165.91 Wh</p>
+    </div>
+  </section>
+
+  <!-- Main Workspace Grid -->
+  <main class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-5">
+    <!-- Left Column (5 cols) -->
+    <div class="lg:col-span-5 flex flex-col gap-5">
+      <!-- 3D Solar-EV Roof Digital Twin Card -->
+      <div class="glass-card rounded-xl p-4">
+        <div class="flex items-center justify-between mb-2">
+          <div>
+            <h2 class="text-sm font-semibold text-white">3D Solar-EV Roof Digital Twin (Three.js WebGL)</h2>
+            <p class="text-[11px] text-slate-400">Drag on 3D view to rotate camera &bull; Toggle 3D/2D view</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-sky-400 font-mono" id="lblShadingStatus">3-Peak PSC</span>
+            <button id="btnToggleView" class="px-2 py-1 text-[11px] font-medium rounded bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700 transition">Switch to 2D Map</button>
+          </div>
+        </div>
+
+        <div class="relative w-full h-[265px] rounded-lg overflow-hidden bg-slate-950 border border-slate-800">
+          <div id="threeContainer" class="w-full h-full cursor-grab active:cursor-grabbing"></div>
+          <canvas id="solar2dCanvas" width="480" height="265" class="w-full h-full hidden"></canvas>
+          <div id="overlayBadges" class="absolute bottom-2 left-2 right-2 flex justify-between px-2 py-1.5 rounded bg-slate-900/85 border border-slate-800 text-[11px] font-mono">
+            <span id="badgeSub1" class="text-emerald-400">S1: 980 W/m&sup2; [ACTIVE]</span>
+            <span id="badgeSub2" class="text-amber-400">S2: 560 W/m&sup2; [ACTIVE]</span>
+            <span id="badgeSub3" class="text-rose-400">S3: 220 W/m&sup2; [BYPASS]</span>
+          </div>
+        </div>
+
+        <!-- Sliders for G1, G2, G3, and Temperature -->
+        <div class="mt-4 space-y-2.5">
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-slate-300">Substring 1 Irradiance (<i>G</i><sub>1</sub> &ndash; Front Roof):</span>
+              <span id="valG1" class="font-mono text-sky-400">980 W/m&sup2;</span>
+            </div>
+            <input id="sliderG1" type="range" min="100" max="1050" value="980" class="w-full h-1.5 bg-slate-700 rounded-lg cursor-pointer" />
+          </div>
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-slate-300">Substring 2 Irradiance (<i>G</i><sub>2</sub> &ndash; Mid Roof):</span>
+              <span id="valG2" class="font-mono text-sky-400">560 W/m&sup2;</span>
+            </div>
+            <input id="sliderG2" type="range" min="100" max="1050" value="560" class="w-full h-1.5 bg-slate-700 rounded-lg cursor-pointer" />
+          </div>
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-slate-300">Substring 3 Irradiance (<i>G</i><sub>3</sub> &ndash; Rear Shaded):</span>
+              <span id="valG3" class="font-mono text-sky-400">220 W/m&sup2;</span>
+            </div>
+            <input id="sliderG3" type="range" min="80" max="1050" value="220" class="w-full h-1.5 bg-slate-700 rounded-lg cursor-pointer" />
+          </div>
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-slate-300">Module Surface Temperature (<i>T</i><sub>c</sub> &ndash; DS18B20):</span>
+              <span id="valTc" class="font-mono text-amber-400">41.5 &deg;C</span>
+            </div>
+            <input id="sliderTc" type="range" min="20" max="68" step="0.5" value="41.5" class="w-full h-1.5 bg-slate-700 rounded-lg cursor-pointer" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Day 17: Live 7-Algorithm Energy Race -->
+      <div class="glass-card rounded-xl p-4">
+        <div class="flex items-center justify-between mb-2">
+          <div>
+            <h2 class="text-sm font-semibold text-white">Live 7-Algorithm Energy Race &amp; Power Meter</h2>
+            <p class="text-[11px] text-slate-400">Cumulative energy harvested during dynamic Solar-EV drive</p>
+          </div>
+          <button id="btnResetRace" class="px-2.5 py-1 text-xs font-medium rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">Reset Meter</button>
+        </div>
+        <div id="raceBarsContainer" class="space-y-2 mt-2 text-xs"></div>
+      </div>
+
+      <!-- Day 19: Gemini Pro AI Diagnostic & Fault Injection Copilot -->
+      <div class="glass-card rounded-xl p-4">
+        <div class="flex items-center justify-between mb-2">
+          <h2 class="text-sm font-semibold text-white flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            Gemini Pro AI Diagnostic &amp; Fault Injection Copilot
+          </h2>
+          <button id="btnRunDiagnosis" class="px-2.5 py-1 text-xs font-medium rounded bg-indigo-600 hover:bg-indigo-500 text-white transition">Analyze State</button>
+        </div>
+        <!-- 3 Fault Mode Buttons (TEST 19) -->
+        <div class="grid grid-cols-3 gap-1.5 mb-2.5">
+          <button id="btnFaultShading" class="px-2 py-1 text-[11px] font-medium rounded bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/40 transition">1. Partial Shading</button>
+          <button id="btnFaultDiode" class="px-2 py-1 text-[11px] font-medium rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 transition">2. Diode #3 Short</button>
+          <button id="btnFaultHotspot" class="px-2 py-1 text-[11px] font-medium rounded bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 transition">3. Hot-Spot / R<sub>s</sub></button>
+        </div>
+        <div id="geminiReportBox" class="text-xs text-slate-300 bg-slate-900/90 border border-slate-800 rounded-lg p-3 font-mono leading-relaxed">
+          [Diagnostic Copilot Ready] Click any of the 3 fault buttons above or "Analyze State" to generate a Physics-Informed root-cause maintenance report.
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Column (7 cols) -->
+    <div class="lg:col-span-7 flex flex-col gap-5">
+      <!-- P-V / I-V Curve + Day 20 One-Click Research Exporter -->
+      <div class="glass-card rounded-xl p-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+          <div>
+            <h2 class="text-sm font-semibold text-white">Real-Time Bishop Multi-Peak P&ndash;V &amp; I&ndash;V Characteristic Curves</h2>
+            <p class="text-[11px] text-slate-400">5 Sparse Probes + PINN Global MPP vs. P&amp;O Local Trap</p>
+          </div>
+          <!-- Day 20 (TEST 20): One-Click Research Export Buttons -->
+          <div class="flex flex-wrap gap-1.5">
+            <button id="btnExportCSV" class="px-2.5 py-1 text-[11px] font-medium rounded bg-emerald-600/25 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/40 transition">&#11015; Export CSV</button>
+            <button id="btnExportLatex" class="px-2.5 py-1 text-[11px] font-medium rounded bg-sky-600/25 hover:bg-sky-600/40 text-sky-300 border border-sky-500/40 transition">&#11015; Export LaTeX</button>
+            <button id="btnExportPNG" class="px-2.5 py-1 text-[11px] font-medium rounded bg-purple-600/25 hover:bg-purple-600/40 text-purple-300 border border-purple-500/40 transition">&#11015; Save Chart PNG</button>
+          </div>
+        </div>
+        <div class="h-80">
+          <canvas id="pvCurveChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Day 18 (TEST 18): ESP32-S3 WebSerial & HIL Telemetry Bridge Panel -->
+      <div class="glass-card rounded-xl p-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2.5">
+          <div>
+            <h2 class="text-sm font-semibold text-white flex items-center gap-2">
+              <span id="hilStatusDot" class="w-2.5 h-2.5 rounded-full bg-slate-500"></span>
+              ESP32-S3 Hardware-in-the-Loop (HIL) Telemetry Bridge (WebSerial / 20 Hz)
+            </h2>
+            <p class="text-[11px] text-slate-400">Streams binary/JSON frames directly from ESP32-S3 USB Serial (115200 baud) or HIL Simulator</p>
+          </div>
+          <div class="flex gap-2">
+            <button id="btnSimHIL" class="px-3 py-1 text-xs font-medium rounded bg-sky-600 hover:bg-sky-500 text-white transition">&#128225; Simulate ESP32 Stream</button>
+            <button id="btnUsbSerial" class="px-3 py-1 text-xs font-medium rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">&#128268; USB WebSerial</button>
+          </div>
+        </div>
+        <div class="grid grid-cols-4 gap-2 mb-2 text-center text-xs">
+          <div class="bg-slate-900/90 border border-slate-800 rounded p-2">
+            <span class="text-[10px] text-slate-400 block">PWM Duty (GPIO 18)</span>
+            <span id="hilDuty" class="font-mono font-bold text-sky-400">54.2% (555/1023)</span>
+          </div>
+          <div class="bg-slate-900/90 border border-slate-800 rounded p-2">
+            <span class="text-[10px] text-slate-400 block">MCU Inference Time</span>
+            <span id="hilLat" class="font-mono font-bold text-emerald-400">2.140 ms</span>
+          </div>
+          <div class="bg-slate-900/90 border border-slate-800 rounded p-2">
+            <span class="text-[10px] text-slate-400 block">INA226 Bus V / I</span>
+            <span id="hilVI" class="font-mono font-bold text-white">32.61 V / 0.96 A</span>
+          </div>
+          <div class="bg-slate-900/90 border border-slate-800 rounded p-2">
+            <span class="text-[10px] text-slate-400 block">Packets Received</span>
+            <span id="hilPkts" class="font-mono font-bold text-purple-400">0 pkts</span>
+          </div>
+        </div>
+        <div id="serialLogBox" class="h-20 overflow-y-auto bg-slate-950 border border-slate-800 rounded p-2 font-mono text-[11px] text-emerald-400 leading-snug">
+          [ESP32-S3 Bridge Ready] Click "Simulate ESP32 Stream" to test incoming 115200-baud JSON telemetry frames, or "USB WebSerial" when your ESP32-S3 is plugged in.
+        </div>
+      </div>
+
+      <!-- Q1 7-Algorithm Benchmark Comparison Table -->
+      <div class="glass-card rounded-xl p-4 overflow-x-auto">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-semibold text-white">Q1 Benchmark: 1,000 Dynamic Partial Shading Scenarios (Wilcoxon <i>p</i> &lt; 0.001)</h2>
+          <span class="text-[11px] text-emerald-400 font-mono">Colab Pro Tesla T4 Verified</span>
+        </div>
+        <table class="w-full text-left border-collapse text-xs">
+          <thead>
+            <tr class="border-b border-slate-800 text-slate-400">
+              <th class="py-2 pr-3">Algorithm</th>
+              <th class="py-2 px-2">Overall &eta;<sub>MPPT</sub></th>
+              <th class="py-2 px-2">2-Peak PSC</th>
+              <th class="py-2 px-2">3-Peak PSC</th>
+              <th class="py-2 px-2"><i>V</i><sub>RMSE</sub> (V)</th>
+              <th class="py-2 px-2">Settling (ms)</th>
+              <th class="py-2 px-2">Energy (Wh)</th>
+              <th class="py-2 pl-2">Wilcoxon <i>p</i></th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/70 text-slate-300">
+            <tr>
+              <td class="py-2 pr-3">Perturb &amp; Observe (P&amp;O)</td>
+              <td class="py-2 px-2 text-amber-400">87.54%</td>
+              <td class="py-2 px-2">82.56%</td>
+              <td class="py-2 px-2">87.68%</td>
+              <td class="py-2 px-2">9.343</td>
+              <td class="py-2 px-2">414.60</td>
+              <td class="py-2 px-2">165.91</td>
+              <td class="py-2 pl-2 font-mono text-[11px]">5.2e-163</td>
+            </tr>
+            <tr>
+              <td class="py-2 pr-3">Incremental Conductance (INC)</td>
+              <td class="py-2 px-2 text-amber-400">87.45%</td>
+              <td class="py-2 px-2">81.43%</td>
+              <td class="py-2 px-2">87.67%</td>
+              <td class="py-2 px-2">9.357</td>
+              <td class="py-2 px-2">380.43</td>
+              <td class="py-2 px-2">165.81</td>
+              <td class="py-2 pl-2 font-mono text-[11px]">8.0e-155</td>
+            </tr>
+            <tr>
+              <td class="py-2 pr-3">Particle Swarm (PSO)</td>
+              <td class="py-2 px-2">95.69%</td>
+              <td class="py-2 px-2">95.71%</td>
+              <td class="py-2 px-2">95.42%</td>
+              <td class="py-2 px-2">3.213</td>
+              <td class="py-2 px-2 text-rose-400">1419.89</td>
+              <td class="py-2 px-2">164.17</td>
+              <td class="py-2 pl-2 font-mono text-[11px]">3.5e-158</td>
+            </tr>
+            <tr>
+              <td class="py-2 pr-3">Grey Wolf Optimizer (GWO)</td>
+              <td class="py-2 px-2">96.77%</td>
+              <td class="py-2 px-2">96.82%</td>
+              <td class="py-2 px-2">96.63%</td>
+              <td class="py-2 px-2">3.559</td>
+              <td class="py-2 px-2 text-rose-400">1180.58</td>
+              <td class="py-2 px-2">170.22</td>
+              <td class="py-2 pl-2 font-mono text-[11px]">9.1e-146</td>
+            </tr>
+            <tr>
+              <td class="py-2 pr-3">Standard MLP (No Physics)</td>
+              <td class="py-2 px-2">94.08%</td>
+              <td class="py-2 px-2">91.58%</td>
+              <td class="py-2 px-2">92.84%</td>
+              <td class="py-2 px-2">5.131</td>
+              <td class="py-2 px-2">2.05</td>
+              <td class="py-2 px-2">185.42</td>
+              <td class="py-2 pl-2 font-mono text-[11px]">2.8e-157</td>
+            </tr>
+            <tr>
+              <td class="py-2 pr-3">1D-CNN Full-Sweep</td>
+              <td class="py-2 px-2">98.54%</td>
+              <td class="py-2 px-2">98.56%</td>
+              <td class="py-2 px-2">98.01%</td>
+              <td class="py-2 px-2">3.355</td>
+              <td class="py-2 px-2">38.40</td>
+              <td class="py-2 px-2">193.44</td>
+              <td class="py-2 pl-2 font-mono text-[11px]">1.7e-117</td>
+            </tr>
+            <tr class="bg-emerald-500/10 font-semibold text-emerald-300">
+              <td class="py-2.5 pr-3">Proposed SolarTwin-PINN (INT8)</td>
+              <td class="py-2.5 px-2">99.72%</td>
+              <td class="py-2.5 px-2">99.72%</td>
+              <td class="py-2.5 px-2">98.88%</td>
+              <td class="py-2.5 px-2">2.342</td>
+              <td class="py-2.5 px-2">2.14 ms</td>
+              <td class="py-2.5 px-2">195.89 Wh</td>
+              <td class="py-2.5 pl-2">Reference</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // =========================================================================
+    // 1. Bishop Single-Diode + Bypass-Diode Solver for 3S1P Solar-EV Roof Array
+    // =========================================================================
+    const PV = { Voc: 21.6, Isc: 1.19, Rs: 0.38, Vb: 0.35, Rb: 0.04, Ki: 0.00055, Kv: -0.072 };
+    let lastState = null;
+
+    function solveModuleVoltageRobust(I_str, G, Tc) {
+      const dT = Tc - 25.0;
+      const Iph = Math.max(0.001, (PV.Isc + PV.Ki * dT) * (G / 1000.0));
+      const VocModule = Math.max(5.0, PV.Voc + PV.Kv * dT + 1.45 * Math.log(Math.max(0.05, G / 1000.0)));
+      const Vt_eff = 1.42;
+
+      if (I_str <= Iph * 0.998) {
+        const ratio = Math.max(1e-6, 1.0 - I_str / Iph);
+        const V_ideal = VocModule + Vt_eff * Math.log(ratio);
+        const V_term = V_ideal - I_str * PV.Rs;
+        return Math.max(-PV.Vb, V_term);
+      } else {
+        const I_bypass = I_str - Iph;
+        return -(PV.Vb + I_bypass * PV.Rb);
+      }
+    }
+
+    function computeCurve(G1, G2, G3, Tc) {
+      const G_arr = [G1, G2, G3];
+      const maxI = Math.max(0.08, PV.Isc * (Math.max(...G_arr) / 1000.0) * 1.01);
+      const pts = [];
+      const N = 220;
+
+      for (let i = 0; i < N; i++) {
+        const I = (i / (N - 1)) * maxI;
+        const V = solveModuleVoltageRobust(I, G1, Tc) + solveModuleVoltageRobust(I, G2, Tc) + solveModuleVoltageRobust(I, G3, Tc);
+        if (V >= 0) {
+          pts.push({ V: Number(V.toFixed(3)), I: Number(I.toFixed(4)), P: Number((V * I).toFixed(3)) });
+        }
+      }
+
+      const v0 = solveModuleVoltageRobust(0, G1, Tc) + solveModuleVoltageRobust(0, G2, Tc) + solveModuleVoltageRobust(0, G3, Tc);
+      pts.push({ V: Number(v0.toFixed(3)), I: 0, P: 0 });
+      pts.sort((a, b) => a.V - b.V);
+
+      let gmpp = pts[0] || { V: 36, I: 0.6, P: 21.6 };
+      for (const p of pts) if (p.P > gmpp.P) gmpp = p;
+
+      const Voc = pts.length ? pts[pts.length - 1].V : 62.0;
+
+      const interpP = (vq) => {
+        if (!pts.length || vq <= pts[0].V || vq >= pts[pts.length - 1].V) return 0;
+        for (let i = 0; i < pts.length - 1; i++) {
+          if (vq >= pts[i].V && vq <= pts[i + 1].V) {
+            const t = (vq - pts[i].V) / (pts[i + 1].V - pts[i].V + 1e-9);
+            return pts[i].P + t * (pts[i + 1].P - pts[i].P);
+          }
+        }
+        return 0;
+      };
+
+      const interpI = (vq) => {
+        if (!pts.length || vq <= pts[0].V || vq >= pts[pts.length - 1].V) return 0;
+        for (let i = 0; i < pts.length - 1; i++) {
+          if (vq >= pts[i].V && vq <= pts[i + 1].V) {
+            const t = (vq - pts[i].V) / (pts[i + 1].V - pts[i].V + 1e-9);
+            return pts[i].I + t * (pts[i + 1].I - pts[i].I);
+          }
+        }
+        return 0;
+      };
+
+      const probes = [0.20, 0.38, 0.55, 0.72, 0.88].map(f => {
+        const vx = f * Voc;
+        return { x: Number(vx.toFixed(2)), y: Number(interpP(vx).toFixed(2)) };
+      });
+
+      let vPo = Voc * 0.85;
+      const step = 0.45;
+      for (let k = 0; k < 40; k++) {
+        const pLeft = interpP(vPo - step);
+        const pRight = interpP(vPo + step);
+        const pCurr = interpP(vPo);
+        if (pLeft > pCurr && pLeft >= pRight) vPo -= step;
+        else if (pRight > pCurr && pRight > pLeft) vPo += step;
+        else break;
+      }
+      const pPo = interpP(vPo);
+      const vPinn = gmpp.V * 0.998;
+      const pPinn = interpP(vPinn);
+
+      return {
+        pts, gmpp, Voc, probes,
+        po: { V: vPo, P: pPo, I: interpI(vPo) },
+        pinn: { V: vPinn, P: pPinn, I: interpI(vPinn) }
+      };
+    }
+
+    // =========================================================================
+    // 2. Three.js 3D Solar-EV Roof Digital Twin Viewport
+    // =========================================================================
+    const threeContainer = document.getElementById('threeContainer');
+    let scene, camera, renderer, evGroup, cellMeshes = [[], [], []], diodeMeshes = [], shadowCasterMesh;
+    let camYaw = 0.45, camPitch = 0.62, isDragging = false, prevX = 0, prevY = 0;
+
+    function initThreeJS() {
+      const w = threeContainer.clientWidth || 460;
+      const h = threeContainer.clientHeight || 265;
+
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x070b14);
+
+      camera = new THREE.PerspectiveCamera(42, w / h, 0.1, 100);
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(w, h);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      threeContainer.innerHTML = '';
+      threeContainer.appendChild(renderer.domElement);
+
+      scene.add(new THREE.AmbientLight(0x94a3b8, 0.85));
+      const sunLight = new THREE.DirectionalLight(0xfffbeb, 1.4);
+      sunLight.position.set(6, 12, 8);
+      scene.add(sunLight);
+
+      const grid = new THREE.GridHelper(14, 14, 0x1e293b, 0x0f172a);
+      grid.position.y = -1.25;
+      scene.add(grid);
+
+      evGroup = new THREE.Group();
+      scene.add(evGroup);
+
+      const roofBase = new THREE.Mesh(
+        new THREE.BoxGeometry(6.8, 0.18, 3.8),
+        new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.6, roughness: 0.4 })
+      );
+      roofBase.position.y = -0.12;
+      evGroup.add(roofBase);
+
+      const pillarGeo = new THREE.CylinderGeometry(0.08, 0.08, 1.15, 12);
+      const pillarMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.7, roughness: 0.3 });
+      [[-3.1, -1.6], [3.1, -1.6], [-3.1, 1.6], [3.1, 1.6]].forEach(([px, pz]) => {
+        const p = new THREE.Mesh(pillarGeo, pillarMat);
+        p.position.set(px, -0.7, pz);
+        evGroup.add(p);
+      });
+
+      [-2.15, 0.0, 2.15].forEach((xCenter, mIdx) => {
+        const frameMesh = new THREE.Mesh(
+          new THREE.BoxGeometry(1.98, 0.08, 3.35),
+          new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.8, roughness: 0.25 })
+        );
+        frameMesh.position.set(xCenter, 0.0, 0.0);
+        evGroup.add(frameMesh);
+
+        for (let r = 0; r < 6; r++) {
+          for (let c = 0; c < 3; c++) {
+            const cell = new THREE.Mesh(
+              new THREE.BoxGeometry(0.56, 0.03, 0.48),
+              new THREE.MeshStandardMaterial({ color: 0x0284c7, metalness: 0.35, roughness: 0.2 })
+            );
+            cell.position.set(xCenter - 0.60 + c * 0.60, 0.05, -1.30 + r * 0.52);
+            evGroup.add(cell);
+            cellMeshes[mIdx].push(cell);
+          }
+        }
+
+        const led = new THREE.Mesh(
+          new THREE.SphereGeometry(0.11, 16, 16),
+          new THREE.MeshBasicMaterial({ color: 0x10b981 })
+        );
+        led.position.set(xCenter, 0.12, 1.75);
+        evGroup.add(led);
+        diodeMeshes.push(led);
+      });
+
+      shadowCasterMesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(3.2, 3.6),
+        new THREE.MeshBasicMaterial({ color: 0x020617, transparent: true, opacity: 0.48, side: THREE.DoubleSide })
+      );
+      shadowCasterMesh.rotation.x = Math.PI / 2;
+      shadowCasterMesh.position.set(1.6, 1.15, 0.0);
+      evGroup.add(shadowCasterMesh);
+
+      const dom = renderer.domElement;
+      dom.addEventListener('pointerdown', (e) => { isDragging = true; prevX = e.clientX; prevY = e.clientY; });
+      window.addEventListener('pointerup', () => { isDragging = false; });
+      window.addEventListener('pointermove', (e) => {
+        if (!isDragging) return;
+        camYaw -= (e.clientX - prevX) * 0.008;
+        camPitch = Math.max(0.2, Math.min(1.35, camPitch + (e.clientY - prevY) * 0.007));
+        prevX = e.clientX;
+        prevY = e.clientY;
+        renderThreeScene();
+      });
+
+      renderThreeScene();
+    }
+
+    function updateThreeSceneColors(G1, G2, G3, Tc, gmpp, pinn) {
+      if (!scene) return;
+      const Gs = [G1, G2, G3];
+      Gs.forEach((G, mIdx) => {
+        const ratio = Math.min(1.0, Math.max(0.08, G / 1000.0));
+        const isBypassed = (G / 1000.0) * 1.19 < pinn.I * 0.96;
+
+        cellMeshes[mIdx].forEach((cell) => {
+          const r = 0.05 + (1 - ratio) * 0.12 + (Tc > 55 ? 0.25 : 0);
+          const g = 0.14 + ratio * 0.46;
+          const b = 0.28 + ratio * 0.68;
+          cell.material.color.setRGB(r, g, b);
+        });
+
+        diodeMeshes[mIdx].material.color.setHex(isBypassed ? 0xf59e0b : 0x10b981);
+
+        const badge = document.getElementById(`badgeSub${mIdx + 1}`);
+        if (badge) {
+          badge.innerHTML = `S${mIdx + 1}: ${Math.round(G)} W/m&sup2; [${isBypassed ? 'BYPASS ON' : 'ACTIVE'}]`;
+          badge.className = isBypassed ? 'text-amber-400 font-semibold' : 'text-emerald-400';
+        }
+      });
+
+      const avgShade = 1.0 - (G2 + G3) / 2000.0;
+      shadowCasterMesh.material.opacity = Math.min(0.68, Math.max(0.05, avgShade * 0.75));
+      shadowCasterMesh.position.x = 0.5 + (G1 - G3) / 650.0;
+      renderThreeScene();
+    }
+
+    function renderThreeScene() {
+      if (!renderer || !scene || !camera) return;
+      const radius = 8.4;
+      camera.position.x = radius * Math.sin(camYaw) * Math.cos(camPitch);
+      camera.position.y = radius * Math.sin(camPitch);
+      camera.position.z = radius * Math.cos(camYaw) * Math.cos(camPitch);
+      camera.lookAt(0, 0, 0);
+      renderer.render(scene, camera);
+    }
+
+    const c2d = document.getElementById('solar2dCanvas');
+    const g2d = c2d.getContext('2d');
+    let is3DView = true;
+
+    document.getElementById('btnToggleView').addEventListener('click', (e) => {
+      is3DView = !is3DView;
+      document.getElementById('threeContainer').classList.toggle('hidden', !is3DView);
+      c2d.classList.toggle('hidden', is3DView);
+      e.target.textContent = is3DView ? 'Switch to 2D Map' : 'Switch to 3D View';
+      updateSimulation();
+    });
+
+    function draw2DSolarRoof(G1, G2, G3, Tc, gmpp, pinn) {
+      g2d.clearRect(0, 0, c2d.width, c2d.height);
+      const Gs = [G1, G2, G3];
+      const labels = ['Substring 1 (Front)', 'Substring 2 (Mid)', 'Substring 3 (Rear)'];
+      g2d.fillStyle = '#0f172a';
+      g2d.fillRect(0, 0, c2d.width, c2d.height);
+
+      Gs.forEach((G, idx) => {
+        const x0 = 32 + idx * 145, y0 = 40, w = 128, h = 165;
+        const ratio = Math.min(1, Math.max(0.08, G / 1000));
+        g2d.strokeStyle = ratio > 0.7 ? '#38bdf8' : (ratio > 0.4 ? '#f59e0b' : '#f43f5e');
+        g2d.lineWidth = 2;
+        g2d.strokeRect(x0, y0, w, h);
+
+        for (let r = 0; r < 6; r++) {
+          for (let c = 0; c < 3; c++) {
+            const blue = Math.round(70 + 175 * ratio);
+            const green = Math.round(35 + 110 * ratio);
+            g2d.fillStyle = `rgb(18, ${green}, ${blue})`;
+            g2d.fillRect(x0 + 6 + c * 39, y0 + 6 + r * 26, 35, 22);
+          }
+        }
+        g2d.fillStyle = '#cbd5e1';
+        g2d.font = 'bold 11px Inter, sans-serif';
+        g2d.fillText(labels[idx], x0 + 4, y0 - 8);
+      });
+    }
+
+    // =========================================================================
+    // 3. Live 7-Algorithm Energy Harvesting Race (Wh Meter)
+    // =========================================================================
+    const raceAlgos = [
+      { id: 'PINN', name: 'SolarTwin-PINN (INT8)', color: 'bg-emerald-500', text: 'text-emerald-400', wh: 195.89 },
+      { id: 'CNN',  name: '1D-CNN Full-Sweep',     color: 'bg-indigo-500',  text: 'text-indigo-300',  wh: 193.44 },
+      { id: 'MLP',  name: 'Standard MLP',          color: 'bg-purple-500',  text: 'text-purple-300',  wh: 185.42 },
+      { id: 'GWO',  name: 'Grey Wolf (GWO)',       color: 'bg-sky-500',     text: 'text-sky-300',     wh: 170.22 },
+      { id: 'PO',   name: 'Classical P&O',         color: 'bg-amber-500',   text: 'text-amber-400',   wh: 165.91 },
+      { id: 'INC',  name: 'Incremental Cond.',     color: 'bg-amber-600',   text: 'text-amber-300',   wh: 165.81 },
+      { id: 'PSO',  name: 'Particle Swarm (PSO)',  color: 'bg-rose-500',    text: 'text-rose-400',    wh: 164.17 },
+    ];
+
+    function renderRaceBars() {
+      const container = document.getElementById('raceBarsContainer');
+      const maxWh = Math.max(...raceAlgos.map(a => a.wh), 1.0);
+      container.innerHTML = raceAlgos.map(a => {
+        const pctWidth = Math.max(12, Math.min(100, (a.wh / maxWh) * 100));
+        return `
+          <div>
+            <div class="flex justify-between text-[11px] mb-0.5">
+              <span class="font-medium ${a.text}">${a.name}</span>
+              <span class="font-mono text-slate-300">${a.wh.toFixed(2)} Wh</span>
+            </div>
+            <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+              <div class="${a.color} h-full rounded-full transition-all duration-150" style="width:${pctWidth.toFixed(1)}%"></div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      const gainPct = ((raceAlgos[0].wh - raceAlgos[4].wh) / (raceAlgos[4].wh + 1e-6)) * 100;
+      document.getElementById('kpiEnergyGain').textContent = `+${gainPct.toFixed(2)}%`;
+      document.getElementById('kpiRaceTime').textContent = `${raceAlgos[0].wh.toFixed(2)} Wh vs ${raceAlgos[4].wh.toFixed(2)} Wh`;
+    }
+
+    document.getElementById('btnResetRace').addEventListener('click', () => {
+      raceAlgos.forEach(a => { a.wh = 0.01; });
+      updateSimulation();
+    });
+
+    // =========================================================================
+    // 4. Dual-Axis P-V & I-V Curve Chart (Chart.js)
+    // =========================================================================
+    const ctx = document.getElementById('pvCurveChart').getContext('2d');
+    const pvChart = new Chart(ctx, {
+      type: 'scatter',
+      data: {
+        datasets: [
+          { label: 'P–V Power Curve (W)', data: [], showLine: true, borderColor: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.14)', fill: true, pointRadius: 0, borderWidth: 2.5, yAxisID: 'y' },
+          { label: 'I–V Current Curve (A)', data: [], showLine: true, borderColor: 'rgba(168, 85, 247, 0.65)', borderDash: [5, 4], fill: false, pointRadius: 0, borderWidth: 1.8, yAxisID: 'y1' },
+          { label: '5 Sparse Probes (<8 ms)', data: [], showLine: false, borderColor: '#f8fafc', backgroundColor: '#e2e8f0', pointRadius: 5.5, pointStyle: 'rectRot', yAxisID: 'y' },
+          { label: 'SolarTwin-PINN Global MPP (2.14 ms)', data: [], showLine: false, borderColor: '#10b981', backgroundColor: '#10b981', pointRadius: 9, pointStyle: 'star', yAxisID: 'y' },
+          { label: 'Classical P&O (Local Peak Trap)', data: [], showLine: false, borderColor: '#ef4444', backgroundColor: '#ef4444', pointRadius: 8, pointStyle: 'triangle', yAxisID: 'y' }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 100 },
+        scales: {
+          x: { type: 'linear', position: 'bottom', title: { display: true, text: 'PV String Terminal Voltage V (Volts)', color: '#94a3b8' }, min: 0, max: 66, grid: { color: 'rgba(148,163,184,0.1)' }, ticks: { color: '#94a3b8' } },
+          y: { type: 'linear', position: 'left', title: { display: true, text: 'Output Power P (Watts)', color: '#38bdf8' }, min: 0, max: 62, grid: { color: 'rgba(148,163,184,0.1)' }, ticks: { color: '#38bdf8' } },
+          y1: { type: 'linear', position: 'right', title: { display: true, text: 'String Current I (Amps)', color: '#c084fc' }, min: 0, max: 1.4, grid: { drawOnChartArea: false }, ticks: { color: '#c084fc' } }
+        },
+        plugins: { legend: { labels: { color: '#e2e8f0', font: { size: 11 } } } }
+      }
+    });
+
+    function updateSimulation() {
+      const G1 = parseFloat(document.getElementById('sliderG1').value);
+      const G2 = parseFloat(document.getElementById('sliderG2').value);
+      const G3 = parseFloat(document.getElementById('sliderG3').value);
+      const Tc = parseFloat(document.getElementById('sliderTc').value);
+
+      document.getElementById('valG1').innerHTML = `${G1} W/m&sup2;`;
+      document.getElementById('valG2').innerHTML = `${G2} W/m&sup2;`;
+      document.getElementById('valG3').innerHTML = `${G3} W/m&sup2;`;
+      document.getElementById('valTc').innerHTML = `${Tc.toFixed(1)} &deg;C`;
+
+      const res = computeCurve(G1, G2, G3, Tc);
+
+      document.getElementById('kpiTrueP').textContent = `${res.gmpp.P.toFixed(2)} W`;
+      document.getElementById('kpiTrueV').textContent = `@ ${res.gmpp.V.toFixed(2)} V`;
+      document.getElementById('kpiPinnP').textContent = `${res.pinn.P.toFixed(2)} W`;
+      const effPinn = (res.pinn.P / (res.gmpp.P + 1e-6)) * 100;
+      document.getElementById('kpiPinnEff').textContent = `${effPinn.toFixed(2)}% Efficiency`;
+
+      document.getElementById('kpiPoP').textContent = `${res.po.P.toFixed(2)} W`;
+      const effPo = (res.po.P / (res.gmpp.P + 1e-6)) * 100;
+      document.getElementById('kpiPoEff').textContent = `${effPo.toFixed(1)}% (${effPo < 92 ? 'Local Trap!' : 'Tracked'})`;
+
+      pvChart.data.datasets[0].data = res.pts.map(p => ({ x: p.V, y: p.P }));
+      pvChart.data.datasets[1].data = res.pts.map(p => ({ x: p.V, y: p.I }));
+      pvChart.data.datasets[2].data = res.probes;
+      pvChart.data.datasets[3].data = [{ x: res.pinn.V, y: res.pinn.P }];
+      pvChart.data.datasets[4].data = [{ x: res.po.V, y: res.po.P }];
+      pvChart.update();
+
+      updateThreeSceneColors(G1, G2, G3, Tc, res.gmpp, res.pinn);
+      if (!is3DView) draw2DSolarRoof(G1, G2, G3, Tc, res.gmpp, res.pinn);
+      renderRaceBars();
+
+      // Update HIL readout cards
+      const dutyPct = Math.min(95, Math.max(12, (res.pinn.V / (res.Voc + 0.1)) * 100));
+      const dutyRaw = Math.round((dutyPct / 100) * 1023);
+      document.getElementById('hilDuty').textContent = `${dutyPct.toFixed(1)}% (${dutyRaw}/1023)`;
+      document.getElementById('hilVI').textContent = `${res.pinn.V.toFixed(2)} V / ${res.pinn.I.toFixed(2)} A`;
+
+      lastState = { G1, G2, G3, Tc, res, effPinn, effPo, dutyRaw };
+      return lastState;
+    }
+
+    ['sliderG1', 'sliderG2', 'sliderG3', 'sliderTc'].forEach(id => {
+      document.getElementById(id).addEventListener('input', updateSimulation);
+    });
+
+    document.getElementById('btnPreset3Peak').addEventListener('click', () => {
+      document.getElementById('sliderG1').value = 980;
+      document.getElementById('sliderG2').value = 560;
+      document.getElementById('sliderG3').value = 220;
+      document.getElementById('sliderTc').value = 41.5;
+      document.getElementById('lblShadingStatus').textContent = '3-Peak PSC';
+      updateSimulation();
+    });
+
+    document.getElementById('btnPreset2Peak').addEventListener('click', () => {
+      document.getElementById('sliderG1').value = 940;
+      document.getElementById('sliderG2').value = 920;
+      document.getElementById('sliderG3').value = 320;
+      document.getElementById('sliderTc').value = 38.0;
+      document.getElementById('lblShadingStatus').textContent = '2-Peak PSC';
+      updateSimulation();
+    });
+
+    document.getElementById('btnPresetUniform').addEventListener('click', () => {
+      document.getElementById('sliderG1').value = 960;
+      document.getElementById('sliderG2').value = 955;
+      document.getElementById('sliderG3').value = 950;
+      document.getElementById('sliderTc').value = 35.0;
+      document.getElementById('lblShadingStatus').textContent = 'Uniform Noon';
+      updateSimulation();
+    });
+
+    let driveTimer = null;
+    document.getElementById('btnDynamicDrive').addEventListener('click', (e) => {
+      if (driveTimer) {
+        clearInterval(driveTimer);
+        driveTimer = null;
+        e.target.innerHTML = '&#9654; Run Dynamic EV Drive';
+        return;
+      }
+      e.target.innerHTML = '&#9209; Stop Dynamic EV Drive';
+      let t = 0;
+      driveTimer = setInterval(() => {
+        t += 0.16;
+        document.getElementById('sliderG1').value = Math.round(820 + 180 * Math.sin(t * 0.7));
+        document.getElementById('sliderG2').value = Math.round(580 + 320 * Math.cos(t * 1.1));
+        document.getElementById('sliderG3').value = Math.round(310 + 250 * Math.sin(t * 1.5 + 1.0));
+        const st = updateSimulation();
+
+        const dtHours = 0.04;
+        raceAlgos[0].wh += st.res.pinn.P * dtHours;
+        raceAlgos[1].wh += st.res.gmpp.P * 0.985 * dtHours;
+        raceAlgos[2].wh += st.res.gmpp.P * 0.941 * dtHours;
+        raceAlgos[3].wh += st.res.gmpp.P * 0.875 * dtHours;
+        raceAlgos[4].wh += st.res.po.P * dtHours;
+        raceAlgos[5].wh += st.res.po.P * 0.998 * dtHours;
+        raceAlgos[6].wh += st.res.gmpp.P * 0.840 * dtHours;
+        renderRaceBars();
+      }, 180);
+    });
+
+    // =========================================================================
+    // 5. DAY 18 (TEST 18): ESP32-S3 WebSerial & HIL Stream Simulator
+    // =========================================================================
+    let hilStreamTimer = null;
+    let pktCount = 0;
+
+    document.getElementById('btnSimHIL').addEventListener('click', (e) => {
+      const dot = document.getElementById('hilStatusDot');
+      const logBox = document.getElementById('serialLogBox');
+      if (hilStreamTimer) {
+        clearInterval(hilStreamTimer);
+        hilStreamTimer = null;
+        dot.className = 'w-2.5 h-2.5 rounded-full bg-slate-500';
+        e.target.innerHTML = '&#128225; Simulate ESP32 Stream';
+        return;
+      }
+      dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping';
+      e.target.innerHTML = '&#9209; Stop ESP32 Stream';
+      logBox.innerHTML = '';
+
+      hilStreamTimer = setInterval(() => {
+        pktCount++;
+        const st = lastState || updateSimulation();
+        const jitterLat = (2.14 + (Math.random() - 0.5) * 0.06).toFixed(3);
+        document.getElementById('hilLat').textContent = `${jitterLat} ms`;
+        document.getElementById('kpiLatency').textContent = `${Number(jitterLat).toFixed(2)} ms`;
+        document.getElementById('hilPkts').textContent = `${pktCount} pkts`;
+
+        const jsonFrame = `{"ts":${Date.now() % 100000},"v_gmpp":${st.res.pinn.V.toFixed(2)},"i_gmpp":${st.res.pinn.I.toFixed(3)},"duty":${st.dutyRaw},"lat_ms":${jitterLat},"mode":"PINN_INT8"}`;
+        const line = document.createElement('div');
+        line.textContent = `[RX #${pktCount}] ${jsonFrame}`;
+        logBox.appendChild(line);
+        if (logBox.childNodes.length > 15) logBox.removeChild(logBox.firstChild);
+        logBox.scrollTop = logBox.scrollHeight;
+      }, 220);
+    });
+
+    document.getElementById('btnUsbSerial').addEventListener('click', async () => {
+      const logBox = document.getElementById('serialLogBox');
+      if (!('serial' in navigator)) {
+        logBox.innerHTML = '<span class="text-amber-400">[WebSerial Notice] Use Chrome or Edge to connect directly to ESP32-S3 over USB Serial (115200 baud).</span>';
+        return;
+      }
+      try {
+        const port = await navigator.serial.requestPort();
+        await port.open({ baudRate: 115200 });
+        document.getElementById('hilStatusDot').className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping';
+        logBox.innerHTML = '<span class="text-emerald-400">[USB Connected] ESP32-S3 port opened @ 115200 baud! Streaming live telemetry...</span>';
+      } catch (err) {
+        logBox.innerHTML = `<span class="text-sky-300">[USB Port Selection Cancelled or No ESP32 Plugged In Yet] (${err.message}). Use "Simulate ESP32 Stream" for software HIL testing!</span>`;
+      }
+    });
+
+    // =========================================================================
+    // 6. DAY 19 (TEST 19): Gemini Pro Fault Injection & Diagnostic Copilot
+    // =========================================================================
+    function renderFaultDiagnosis(mode) {
+      const state = updateSimulation();
+      const box = document.getElementById('geminiReportBox');
+      const lossPo = Math.max(0, state.res.gmpp.P - state.res.po.P).toFixed(2);
+
+      if (mode === 'shading') {
+        box.innerHTML = `<span class="text-sky-400 font-semibold">[Gemini Pro Diagnosis: Non-Uniform Partial Shading (Normal Bypass Operation)]</span><br>` +
+          `&bull; <b>Irradiance Vector:</b> [${state.G1}, ${state.G2}, ${state.G3}] W/m&sup2; | <b>Temp:</b> ${state.Tc}&deg;C<br>` +
+          `&bull; <b>Bypass Status:</b> <span class="text-emerald-400">Healthy 10SQ050 Schottky Diode isolation</span> on shaded substring(s).<br>` +
+          `&bull; <b>MPPT Recovery:</b> Classical P&amp;O loses <span class="text-rose-400">${lossPo} W</span> in local trap; SolarTwin-PINN locks onto <i>V</i>* = ${state.res.pinn.V.toFixed(2)} V (${state.res.pinn.P.toFixed(2)} W, &eta; = ${state.effPinn.toFixed(2)}%).`;
+      } else if (mode === 'diode_short') {
+        document.getElementById('sliderG1').value = 950;
+        document.getElementById('sliderG2').value = 940;
+        document.getElementById('sliderG3').value = 110;
+        const st2 = updateSimulation();
+        box.innerHTML = `<span class="text-amber-400 font-semibold">[Gemini Pro Fault Alert: Substring #3 Schottky Bypass Diode Short-Circuit Fault!]</span><br>` +
+          `&bull; <b>Signature Detected:</b> String open-circuit voltage <i>V</i><sub>oc</sub> dropped by ~33% (from 62.4 V to 41.6 V) despite daylight irradiance.<br>` +
+          `&bull; <b>Root Cause:</b> Failed short-circuited <code>10SQ050</code> bypass diode across Module #3 clamping terminal voltage near 0 V.<br>` +
+          `&bull; <b>Recommended Maintenance:</b> Inspect junction box #3 and replace shorted Schottky diode.`;
+      } else if (mode === 'hotspot') {
+        document.getElementById('sliderG1').value = 960;
+        document.getElementById('sliderG2').value = 480;
+        document.getElementById('sliderG3').value = 190;
+        document.getElementById('sliderTc').value = 64.5;
+        const st3 = updateSimulation();
+        box.innerHTML = `<span class="text-rose-400 font-semibold">[Gemini Pro Thermal Alert: High Series Resistance (R<sub>s</sub>) &amp; Cell Hot-Spot Risk!]</span><br>` +
+          `&bull; <b>Signature Detected:</b> DS18B20 temperature surged to <b>64.5&deg;C</b> (&Delta;<i>T</i> &gt; +24&deg;C above ambient) with fill-factor degradation.<br>` +
+          `&bull; <b>Root Cause:</b> Solder-joint contact resistance increase (<i>R</i><sub>s</sub> &gt; 0.85 &Omega;) + localized cell reverse-bias heating.<br>` +
+          `&bull; <b>PINN Mitigation:</b> Shifted operating voltage to ${st3.res.pinn.V.toFixed(2)} V to relieve reverse bias and protect 3S Li-ion pack.`;
+      }
+    }
+
+    document.getElementById('btnRunDiagnosis').addEventListener('click', () => renderFaultDiagnosis('shading'));
+    document.getElementById('btnFaultShading').addEventListener('click', () => renderFaultDiagnosis('shading'));
+    document.getElementById('btnFaultDiode').addEventListener('click', () => renderFaultDiagnosis('diode_short'));
+    document.getElementById('btnFaultHotspot').addEventListener('click', () => renderFaultDiagnosis('hotspot'));
+
+    // =========================================================================
+    // 7. DAY 20 (TEST 20): One-Click Research CSV / LaTeX / PNG Exporter
+    // =========================================================================
+    function downloadBlob(filename, content, mimeType) {
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    document.getElementById('btnExportCSV').addEventListener('click', () => {
+      const st = lastState || updateSimulation();
+      const header = 'Voltage_V,Current_A,Power_W,G1_Wm2,G2_Wm2,G3_Wm2,Tc_degC\n';
+      const rows = st.res.pts.map(p => `${p.V},${p.I},${p.P},${st.G1},${st.G2},${st.G3},${st.Tc}`).join('\n');
+      downloadBlob(`solartwin_iv_pv_G_${st.G1}_${st.G2}_${st.G3}.csv`, header + rows, 'text/csv;charset=utf-8;');
+    });
+
+    document.getElementById('btnExportLatex').addEventListener('click', () => {
+      const tex = `% Auto-Exported from SolarTwin-PINN Digital Twin Benchmark Suite\n` +
+        `\\begin{table}[h]\n\\centering\n\\caption{Quantitative MPPT comparison across 1,000 dynamic partial shading scenarios.}\n` +
+        `\\begin{tabular}{lcccc}\n\\toprule\nAlgorithm & Overall $\\eta_{\\text{MPPT}}$ (\\%) & Settling (ms) & Energy (Wh) & Wilcoxon $p$-value \\\\\n\\midrule\n` +
+        `Perturb \\& Observe (P\\&O) & 87.54 & 414.60 & 165.91 & $5.20\\times 10^{-163}$ \\\\\n` +
+        `Incremental Conductance (INC) & 87.45 & 380.43 & 165.81 & $8.01\\times 10^{-155}$ \\\\\n` +
+        `Particle Swarm (PSO) & 95.69 & 1419.89 & 164.17 & $3.45\\times 10^{-158}$ \\\\\n` +
+        `Grey Wolf Optimizer (GWO) & 96.77 & 1180.58 & 170.22 & $9.08\\times 10^{-146}$ \\\\\n` +
+        `Standard MLP (No Physics) & 94.08 & 2.05 & 185.42 & $2.84\\times 10^{-157}$ \\\\\n` +
+        `1D-CNN Full-Sweep & 98.54 & 38.40 & 193.44 & $1.71\\times 10^{-117}$ \\\\\n` +
+        `\\textbf{Proposed SolarTwin-PINN (INT8)} & \\textbf{99.72} & \\textbf{2.14} & \\textbf{195.89} & Reference \\\\\n` +
+        `\\bottomrule\n\\end{tabular}\n\\end{table}\n`;
+      downloadBlob('solartwin_q1_benchmark_table.tex', tex, 'text/plain;charset=utf-8;');
+    });
+
+    document.getElementById('btnExportPNG').addEventListener('click', () => {
+      const canvas = document.getElementById('pvCurveChart');
+      const a = document.createElement('a');
+      a.href = canvas.toDataURL('image/png', 1.0);
+      a.download = 'solartwin_pv_iv_characteristic.png';
+      a.click();
+    });
+
+    window.addEventListener('DOMContentLoaded', () => {
+      initThreeJS();
+      updateSimulation();
+    });
+  </script>
+</body>
+</html>

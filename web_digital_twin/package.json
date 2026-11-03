@@ -1,0 +1,9 @@
+{
+  "name": "solartwin-pinn-digital-twin",
+  "version": "1.0.0",
+  "private": false,
+  "description": "SolarTwin-PINN: 3D Edge-Cloud Digital Twin & Q1 Benchmark Suite for Solar-Electric Vehicles under Dynamic Partial Shading (University of Dhaka)",
+  "scripts": {
+    "start": "npx serve ."
+  }
+}

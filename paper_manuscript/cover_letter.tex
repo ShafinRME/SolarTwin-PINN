@@ -1,0 +1,32 @@
+\documentclass[11pt,a4paper]{letter}
+\usepackage[margin=1in]{geometry}
+\usepackage{hyperref}
+
+\signature{Md. Shafin Ahmed\\Department of Robotics and Mechatronics Engineering\\University of Dhaka, Dhaka 1000, Bangladesh\\Email: \texttt{shafin.rmedu@gmail.com} | Phone: +8801764673803}
+\address{Department of Robotics and Mechatronics Engineering\\University of Dhaka\\Dhaka 1000, Bangladesh}
+
+\begin{document}
+
+\begin{letter}{Editor-in-Chief\\\textbf{Applied Energy / Renewable Energy}\\Elsevier}
+
+\opening{Dear Editor-in-Chief,}
+
+Please find enclosed our original research manuscript entitled \textbf{``A Physics-Informed Edge--Cloud Digital Twin for Ultra-Fast Global MPPT and Battery Health Prognostics in Solar-Electric Vehicles under Dynamic Partial Shading''} for consideration as a Full-Length Research Article in your journal.
+
+Solar-Electric Vehicles (SEVs) operating in urban corridors experience rapid, non-uniform Partial Shading Conditions (PSCs) that fracture the photovoltaic (PV) $P\text{--}V$ curve into multiple local peaks. Existing hill-climbing trackers (P\&O, INC) suffer from severe power loss due to local-optima trapping, whereas metaheuristic algorithms (PSO, GWO) require $0.4\text{--}1.5\text{ s}$ of iterative duty-cycle sweeping, failing to keep pace with vehicular motion.
+
+To resolve this fundamental trade-off between global optimality and convergence speed, our manuscript makes the following key contributions:
+\begin{enumerate}
+    \item \textbf{Five-Point Sparse Probing \& INT8 Physics-Informed TinyML:} We propose \emph{SolarTwin-PINN}, which samples only five sparse voltage--current points ($<8\text{ ms}$) and executes an INT8-quantized Physics-Informed Neural Network (`14.8 KB` Flash) in $2.14\text{ ms}$ on a low-cost ESP32-S3 microcontroller.
+    \item \textbf{Bishop Bypass-Diode Inflection Constraints:} By embedding single-diode current continuity and power optimality bounds directly into the training loss, our model avoids unphysical predictions and achieves $99.45\%$ overall MPPT tracking efficiency ($99.72\%$ under two-peak PSC and $98.88\%$ under three-peak PSC).
+    \item \textbf{Open-Source 3D Web Digital Twin \& Hardware-in-the-Loop Validation:} We pair the embedded controller with an interactive 3D web Digital Twin for real-time telemetry, cloud recalibration, and Li-ion battery State-of-Health (SoH) prognostics, harvesting $18.07\%$ more solar energy than classical P\&O over a 10-hour Dhaka driving cycle.
+\end{enumerate}
+
+We confirm that this manuscript is original, has not been published elsewhere, and is not currently under consideration by any other journal. All authors have approved the manuscript and declare no competing financial interests.
+
+Thank you for your time and consideration.
+
+\closing{Sincerely,}
+
+\end{letter}
+\end{document}

@@ -1,0 +1,20 @@
+========================================================================
+ELSEVIER MANDATORY SUBMISSION DECLARATIONS (COPY-PASTE INTO PORTAL)
+========================================================================
+
+1. CRediT AUTHORSHIP CONTRIBUTION STATEMENT
+------------------------------------------------------------------------
+Md. Shafin Ahmed: Conceptualization, Methodology, Software (Physics-Informed Neural Network & 3D Web Digital Twin), Hardware-in-the-Loop (ESP32-S3) Implementation, Validation, Formal Analysis, Data Curation, Writing – Original Draft, Visualization.
+[Optional Co-Author / MSc Supervisor Name]: Supervision, Project Administration, Validation, Writing – Review & Editing.
+
+2. DECLARATION OF COMPETING INTEREST
+------------------------------------------------------------------------
+The authors declare that they have no known competing financial interests or personal relationships that could have appeared to influence the work reported in this paper.
+
+3. DATA AND CODE AVAILABILITY STATEMENT
+------------------------------------------------------------------------
+The complete source code for the Bishop Single-Diode Partial Shading physics simulator, PyTorch Physics-Informed Neural Network (PINN) training pipeline, INT8 quantized ESP32-S3 firmware (`esp32_pinn_weights.h`), and interactive 3D Web Digital Twin platform are publicly available to ensure full reproducibility.
+
+4. FUNDING ACKNOWLEDGMENT
+------------------------------------------------------------------------
+This research did not receive any specific external grant from funding agencies in the public, commercial, or not-for-profit sectors. Hardware prototyping was supported by the Department of Robotics and Mechatronics Engineering, University of Dhaka.

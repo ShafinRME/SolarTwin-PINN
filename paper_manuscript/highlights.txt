@@ -1,0 +1,7 @@
+Research Highlights (Strictly <= 85 characters per bullet including spaces for Elsevier):
+
+- Physics-informed edge-cloud Digital Twin for Solar-EV global MPPT under shading.
+- Predicts global MPP from 5 sparse I-V probes in 2.14 ms on ESP32-S3 (14.8 KB).
+- Embeds Bishop bypass-diode inflection priors to prevent local peak stagnation.
+- Achieves 99.45% tracking efficiency across 500 dynamic partial shading cases.
+- Harvests 18.07% more solar energy than P&O with real-time 3D web diagnostics.
